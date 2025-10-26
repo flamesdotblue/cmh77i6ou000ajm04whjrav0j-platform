@@ -1,28 +1,107 @@
-import { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react';
+import Header from './components/Header';
+import Hero from './components/Hero';
+import BookSection from './components/BookSection';
+import MainRouter from './components/MainRouter';
+import LoginModal from './components/LoginModal';
 
-function App() {
-  const [count, setCount] = useState(0)
+export const AppContext = React.createContext(null);
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-lg">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">
-          Vibe Coding Platform
-        </h1>
-        <p className="text-gray-600 mb-6">
-          Your AI-powered development environment
-        </p>
-        <div className="text-center">
-          <button
-            onClick={() => setCount(count + 1)}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded"
-          >
-            Count is {count}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
+const defaultHospitals = [
+  {
+    id: 'hosp1',
+    name: 'Apollo Health City',
+    location: 'Downtown',
+    departments: ['Cardiology', 'Neurology', 'Orthopedics', 'General Medicine'],
+  },
+  {
+    id: 'hosp2',
+    name: 'Sunrise Multispeciality',
+    location: 'Midtown',
+    departments: ['Pediatrics', 'Dermatology', 'ENT', 'General Medicine'],
+  },
+  {
+    id: 'hosp3',
+    name: 'St. Mary Clinic',
+    location: 'Uptown',
+    departments: ['General Medicine', 'Gynecology', 'Ophthalmology'],
+  },
+];
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('app_state_v1');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
-export default App
+function saveState(state) {
+  try {
+    localStorage.setItem('app_state_v1', JSON.stringify(state));
+  } catch {}
+}
+
+export default function App() {
+  const persisted = loadState();
+  const [view, setView] = useState(persisted?.view || 'home'); // home | patient | doctor
+  const [user, setUser] = useState(persisted?.user || null); // {role: 'patient'|'doctor', name, phone}
+  const [hospitals] = useState(defaultHospitals);
+
+  // queues: { [hospitalId]: { [dept]: { waiting: [appt], completed: [appt] } } }
+  const [queues, setQueues] = useState(persisted?.queues || {});
+  const [showLogin, setShowLogin] = useState(false);
+
+  useEffect(() => {
+    saveState({ view, user, queues });
+  }, [view, user, queues]);
+
+  const contextValue = useMemo(
+    () => ({
+      user,
+      setUser,
+      view,
+      setView,
+      hospitals,
+      queues,
+      setQueues,
+      openLogin: () => setShowLogin(true),
+      closeLogin: () => setShowLogin(false),
+    }),
+    [user, view, hospitals, queues]
+  );
+
+  return (
+    <AppContext.Provider value={contextValue}>
+      <div className="min-h-screen bg-neutral-950 text-white">
+        <Header onLoginClick={() => setShowLogin(true)} />
+        {view === 'home' && (
+          <>
+            <Hero />
+            <div className="max-w-6xl mx-auto px-4">
+              <BookSection />
+            </div>
+          </>
+        )}
+        {view !== 'home' && (
+          <div className="max-w-6xl mx-auto px-4 py-8">
+            <MainRouter />
+          </div>
+        )}
+        {showLogin && (
+          <LoginModal
+            onClose={() => setShowLogin(false)}
+            onLogin={(role, name) => {
+              const next = { role, name };
+              setUser(next);
+              setShowLogin(false);
+              setView(role === 'doctor' ? 'doctor' : 'patient');
+            }}
+          />
+        )}
+      </div>
+    </AppContext.Provider>
+  );
+}
